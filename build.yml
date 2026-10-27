@@ -1,0 +1,44 @@
+name: Build 8821cu.ko (aarch64 / 3.14)
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout driver source
+        uses: actions/checkout@v4
+
+      - name: Install aarch64 cross toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y gcc-aarch64-linux-gnu make flex bison bc libssl-dev git
+
+      - name: Clone Amlogic S905 3.14 kernel
+        run: |
+          git clone --depth 1 --branch odroidc2-3.14.y https://github.com/hardkernel/linux /tmp/linux
+
+      - name: Prepare kernel build tree
+        run: |
+          cd /tmp/linux
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- odroidc2_defconfig
+          scripts/config --disable CONFIG_MODVERSIONS
+          scripts/config --enable CONFIG_CFG80211
+          scripts/config --enable CONFIG_MAC80211
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules_prepare -j$(nproc)
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- scripts
+
+      - name: Build 8821cu.ko
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KSRC=/tmp/linux KVER=3.14.29 clean
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KSRC=/tmp/linux KVER=3.14.29 -j$(nproc)
+          ls -l 8821cu.ko
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 8821cu-ko
+          path: 8821cu.ko
